@@ -13,6 +13,7 @@ import {
     ListToolsRequestSchema,
     CallToolRequestSchema,
   } from "@modelcontextprotocol/sdk/types.js";
+import { fileTools, fileHandlers } from "./tools/files.js";
 
 const octokit = createGitHubClient(process.env.GITHUB_TOKEN);
 
@@ -28,15 +29,8 @@ const server = new Server(
   }
 );
 
-// Unir tools
-const ALL_TOOLS = [...repoTools, ...branchTools, ...prTools];
-
-// Unir handlers
-const ALL_HANDLERS = {
-  ...repoHandlers,
-  ...branchHandlers,
-  ...prHandlers,
-};
+const ALL_TOOLS = [...repoTools, ...branchTools, ...prTools, ...fileTools];
+const ALL_HANDLERS = { ...repoHandlers, ...branchHandlers, ...prHandlers, ...fileHandlers };
 // listar 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: ALL_TOOLS };

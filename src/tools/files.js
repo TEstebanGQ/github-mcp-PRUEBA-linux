@@ -88,8 +88,18 @@ export const fileHandlers = {
       const owner = args.owner ?? defaultOwner;
       const { repo, path, content, message } = args;
       const encoded = Buffer.from(content).toString("base64");
-      await octokit.repos.createOrUpdateFileContents({ owner, repo, path, message, content: encoded });
-      return success(`Archivo ${path} creado`);
+
+      // Si el archivo ya existe, obtener su SHA para poder actualizarlo
+      let sha;
+      try {
+        const existing = await octokit.repos.getContent({ owner, repo, path });
+        sha = existing.data.sha;
+      } catch {
+        // El archivo no existe, se creará nuevo
+      }
+
+      await octokit.repos.createOrUpdateFileContents({ owner, repo, path, message, content: encoded, ...(sha && { sha }) });
+      return success(sha ? `Archivo ${path} actualizado` : `Archivo ${path} creado`);
     } catch (e) {
       return error(e.message);
     }

@@ -24,7 +24,6 @@ const ALL_HANDLERS = {
   ...fileHandlers,
 };
 
-// Definición de tools para Groq 
 const tools = [
   // REPOS
   {
@@ -274,7 +273,19 @@ Ayudas a gestionar repositorios, ramas, pull requests y archivos usando las tool
 Responde siempre en español, de forma breve y clara.
 Si una acción fue exitosa confírmala. Si hubo error explícalo de forma simple.
 Recuerda el contexto de la conversación para no pedir datos que ya se mencionaron.
-IMPORTANTE: cuando uses tools, el parámetro owner NUNCA debe incluir el símbolo @, solo el nombre de usuario plano.`,
+
+REGLAS CRÍTICAS para llamar tools:
+- El parámetro "owner" es el nombre de usuario de GitHub: "${defaultOwner}". Úsalo por defecto si no se indica otro.
+- El parámetro "repo" es el nombre del repositorio (ejemplo: "rita", "mi-proyecto"). NUNCA pongas el nombre de usuario en "repo".
+- El parámetro "owner" NUNCA debe incluir el símbolo @.
+- Cuando el usuario diga "entra al repo X" o "en el repo X", el repo es X y el owner es "${defaultOwner}".
+- Si el resultado de una tool indica error, no intentes llamarla de nuevo con parámetros inventados. Informa al usuario.
+
+SOBRE COMMITS Y PUSH:
+- En la API de GitHub NO existe un comando "push" separado. Cada vez que creas o actualizas un archivo con create_file, eso YA es un commit que queda guardado en el repositorio.
+- Cuando el usuario diga "haz un commit", "sube los cambios", "haz push", o "guarda los cambios", debes usar create_file con el contenido actualizado y un mensaje de commit descriptivo.
+- El parámetro "message" de create_file ES el mensaje del commit.
+- No le digas al usuario que no puedes hacer commits o push — sí puedes, usando create_file.`,
   },
 ];
 
@@ -285,11 +296,27 @@ const rl = readline.createInterface({
 });
 
 console.log(`\n GitHub AI Chat — conectado como @${defaultOwner}`);
-console.log('Escribe lo que necesites. Escribe "salir" para terminar.\n');
+console.log('Escribe lo que necesites. Escribe "salir" para terminar.');
+console.log('Tip: usa """ al inicio y """ al final para pegar texto multilínea.\n');
+
+function readMultiline(firstLine) {
+  return new Promise((resolve) => {
+    const lines = [firstLine.replace(/^"""/, "").trimEnd()];
+    const sub = readline.createInterface({ input: process.stdin, output: process.stdout });
+    sub.on("line", (line) => {
+      if (line.trimEnd() === '"""') {
+        sub.close();
+        resolve(lines.join("\n").trim());
+      } else {
+        lines.push(line);
+      }
+    });
+  });
+}
 
 function prompt() {
-  rl.question("tú > ", async (input) => {
-    const text = input.trim();
+  rl.question("tú > ", async (rawInput) => {
+    let text = rawInput.trim();
     if (!text) return prompt();
     if (text.toLowerCase() === "salir") {
       console.log("¡Hasta luego!");
@@ -297,17 +324,38 @@ function prompt() {
       process.exit(0);
     }
 
+    if (text.startsWith('"""')) {
+      rl.pause();
+      text = await readMultiline(text);
+      rl.resume();
+    }
+
     history.push({ role: "user", content: text });
+    async function callGroq(messages) {
+      return groq.chat.completions.create({
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages,
+        tools,
+        tool_choice: "auto",
+        max_tokens: 1024,
+      });
+    }
 
     try {
+      let retried = false;
       while (true) {
-        const response = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
-          messages: history,
-          tools,
-          tool_choice: "auto",
-          max_tokens: 1024,
-        });
+        const trimmed = [history[0], ...history.slice(Math.max(1, history.length - 6))];
+        let response;
+        try {
+          response = await callGroq(trimmed);
+        } catch (innerErr) {
+          if (!retried && (innerErr.message.includes("failed_generation") || innerErr.message.includes("tool_use_failed"))) {
+            retried = true;
+            response = await callGroq([history[0], history[history.length - 1]]);
+          } else {
+            throw innerErr;
+          }
+        }
 
         const message = response.choices[0].message;
         history.push(message);
@@ -324,17 +372,32 @@ function prompt() {
           process.stdout.write(`  ⚙  ${call.function.name}(${JSON.stringify(args)}) → `);
           const output = await executeTool(call.function.name, args);
           console.log("listo");
+          console.log(`\n${output}\n`);
+
+          // Guardar en historial una versión corta para ahorrar tokens
+          const MAX_HISTORY_CHARS = 400;
+          const historyContent = output.length > MAX_HISTORY_CHARS
+            ? output.slice(0, MAX_HISTORY_CHARS) + "\n...(resultado truncado)"
+            : output;
 
           history.push({
             role: "tool",
             tool_call_id: call.id,
-            content: output,
+            content: historyContent,
           });
         }
         // Volver a llamar con los resultados
       }
     } catch (err) {
-      console.error(`\n Error: ${err.message}\n`);
+      if (err.message.includes("failed_generation") || err.message.includes("tool_use_failed")) {
+        console.error(`\n El modelo generó una llamada inválida incluso tras reintentar. Escribe tu solicitud de otra forma.\n`);
+      } else if (err.message.includes("rate_limit_exceeded")) {
+        const match = err.message.match(/try again in (\d+)m([\d.]+)s/);
+        const espera = match ? `${match[1]}m ${Math.ceil(parseFloat(match[2]))}s` : "unos minutos";
+        console.error(`\n Límite de tokens alcanzado. Espera ${espera} e intenta de nuevo.\n`);
+      } else {
+        console.error(`\n Error: ${err.message}\n`);
+      }
     }
 
     prompt();

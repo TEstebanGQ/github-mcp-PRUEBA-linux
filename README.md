@@ -76,6 +76,15 @@ npm start
 Esto levanta el servidor MCP en modo stdio, listo para conectarse con un cliente MCP (como Claude Desktop).
 
 ---
+## Ejecutar
+
+```bash
+node chat.js
+```
+
+Esto levanta el servidor MCP en modo stdio, listo para conectarse con un cliente MCP (como Claude Desktop).
+
+---
 
 ## Estructura del proyecto
 

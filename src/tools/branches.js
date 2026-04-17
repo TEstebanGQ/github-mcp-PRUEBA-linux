@@ -43,17 +43,19 @@ export const branchTools = [
 ];
 
 export const branchHandlers = {
-  create_branch: async ({ octokit, args, defaultOwner }) => {
-    try {
-      const owner = args.owner ?? defaultOwner;
-      const { repo, branch, from } = args;
-      const refData = await octokit.git.getRef({ owner, repo, ref: `heads/${from}` });
-      await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: refData.data.object.sha });
-      return success(`Rama ${branch} creada desde ${from}`);
-    } catch (e) {
-      return error(e.message);
-    }
-  },
+    create_branch: async ({ octokit, args, defaultOwner }) => {
+        try {
+          const owner = args.owner ?? defaultOwner;
+          const { repo, branch, from } = args;
+          const branchData = await octokit.repos.getBranch({ owner, repo, branch: from });
+          const sha = branchData.data.commit.sha;
+          
+          await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha });
+          return success(`Rama ${branch} creada desde ${from}`);
+        } catch (e) {
+          return error(e.message);
+        }
+      },
 
   list_branches: async ({ octokit, args, defaultOwner }) => {
     try {

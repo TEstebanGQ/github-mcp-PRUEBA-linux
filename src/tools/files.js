@@ -6,7 +6,7 @@ export const fileTools = [
     description: "Listar archivos de un repo",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo"],
+      required: ["repo"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -19,7 +19,7 @@ export const fileTools = [
     description: "Leer contenido de un archivo",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "path"],
+      required: ["repo", "path"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -32,7 +32,7 @@ export const fileTools = [
     description: "Crear archivo en un repo",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "path", "content", "message"],
+      required: ["repo", "path", "content", "message"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -47,7 +47,7 @@ export const fileTools = [
     description: "Eliminar archivo de un repo",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "path", "message"],
+      required: ["repo", "path", "message"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -59,9 +59,10 @@ export const fileTools = [
 ];
 
 export const fileHandlers = {
-  list_files: async ({ octokit, args }) => {
+  list_files: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, path = "" } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, path = "" } = args;
       const res = await octokit.repos.getContent({ owner, repo, path });
       const files = res.data.map((f) => `${f.type === "dir" ? "📁" : "📄"} ${f.name}`).join("\n");
       return success(`Archivos en /${path}:\n${files}`);
@@ -70,9 +71,10 @@ export const fileHandlers = {
     }
   },
 
-  read_file: async ({ octokit, args }) => {
+  read_file: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, path } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, path } = args;
       const res = await octokit.repos.getContent({ owner, repo, path });
       const content = Buffer.from(res.data.content, "base64").toString("utf-8");
       return success(`Contenido de ${path}:\n\n${content}`);
@@ -81,9 +83,10 @@ export const fileHandlers = {
     }
   },
 
-  create_file: async ({ octokit, args }) => {
+  create_file: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, path, content, message } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, path, content, message } = args;
       const encoded = Buffer.from(content).toString("base64");
       await octokit.repos.createOrUpdateFileContents({ owner, repo, path, message, content: encoded });
       return success(`Archivo ${path} creado`);
@@ -92,9 +95,10 @@ export const fileHandlers = {
     }
   },
 
-  delete_file: async ({ octokit, args }) => {
+  delete_file: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, path, message } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, path, message } = args;
       const fileRes = await octokit.repos.getContent({ owner, repo, path });
       await octokit.repos.deleteFile({ owner, repo, path, message, sha: fileRes.data.sha });
       return success(`Archivo ${path} eliminado`);

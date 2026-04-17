@@ -6,7 +6,7 @@ export const prTools = [
     description: "Listar pull requests",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo"],
+      required: ["repo"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -18,7 +18,7 @@ export const prTools = [
     description: "Crear pull request",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "title", "head", "base"],
+      required: ["repo", "title", "head", "base"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -33,7 +33,7 @@ export const prTools = [
     description: "Hacer merge de un PR",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "pull_number"],
+      required: ["repo", "pull_number"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -46,7 +46,7 @@ export const prTools = [
     description: "Cerrar pull request",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "pull_number"],
+      required: ["repo", "pull_number"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -57,9 +57,10 @@ export const prTools = [
 ];
 
 export const prHandlers = {
-  list_prs: async ({ octokit, args }) => {
+  list_prs: async ({ octokit, args, defaultOwner }) => {
     try {
-      const res = await octokit.pulls.list({ owner: args.owner, repo: args.repo });
+      const owner = args.owner ?? defaultOwner;
+      const res = await octokit.pulls.list({ owner, repo: args.repo });
       const prs = res.data.map((pr) => `#${pr.number} - ${pr.title}`).join("\n");
       return success(`PRs:\n${prs}`);
     } catch (e) {
@@ -67,9 +68,10 @@ export const prHandlers = {
     }
   },
 
-  create_pr: async ({ octokit, args }) => {
+  create_pr: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, title, head, base } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, title, head, base } = args;
       const res = await octokit.pulls.create({ owner, repo, title, head, base });
       return success(`PR creado: #${res.data.number} - ${res.data.title}\n${res.data.html_url}`);
     } catch (e) {
@@ -77,9 +79,10 @@ export const prHandlers = {
     }
   },
 
-  merge_pr: async ({ octokit, args }) => {
+  merge_pr: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, pull_number } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, pull_number } = args;
       await octokit.pulls.merge({ owner, repo, pull_number });
       return success(`PR #${pull_number} mergeado`);
     } catch (e) {
@@ -87,9 +90,10 @@ export const prHandlers = {
     }
   },
 
-  close_pr: async ({ octokit, args }) => {
+  close_pr: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, pull_number } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, pull_number } = args;
       await octokit.pulls.update({ owner, repo, pull_number, state: "closed" });
       return success(`PR #${pull_number} cerrado`);
     } catch (e) {

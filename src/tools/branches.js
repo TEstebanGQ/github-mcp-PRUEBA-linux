@@ -6,7 +6,7 @@ export const branchTools = [
     description: "Crear rama",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "branch", "from"],
+      required: ["repo", "branch", "from"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -20,7 +20,7 @@ export const branchTools = [
     description: "Listar ramas",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo"],
+      required: ["repo"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -32,7 +32,7 @@ export const branchTools = [
     description: "Eliminar rama",
     inputSchema: {
       type: "object",
-      required: ["owner", "repo", "branch"],
+      required: ["repo", "branch"],
       properties: {
         owner: { type: "string" },
         repo: { type: "string" },
@@ -43,9 +43,10 @@ export const branchTools = [
 ];
 
 export const branchHandlers = {
-  create_branch: async ({ octokit, args }) => {
+  create_branch: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, branch, from } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, branch, from } = args;
       const refData = await octokit.git.getRef({ owner, repo, ref: `heads/${from}` });
       await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: refData.data.object.sha });
       return success(`Rama ${branch} creada desde ${from}`);
@@ -54,9 +55,10 @@ export const branchHandlers = {
     }
   },
 
-  list_branches: async ({ octokit, args }) => {
+  list_branches: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo } = args;
       const res = await octokit.repos.listBranches({ owner, repo });
       const branches = res.data.map((b) => b.name).join("\n");
       return success(`Ramas:\n${branches}`);
@@ -65,9 +67,10 @@ export const branchHandlers = {
     }
   },
 
-  delete_branch: async ({ octokit, args }) => {
+  delete_branch: async ({ octokit, args, defaultOwner }) => {
     try {
-      const { owner, repo, branch } = args;
+      const owner = args.owner ?? defaultOwner;
+      const { repo, branch } = args;
       await octokit.git.deleteRef({ owner, repo, ref: `heads/${branch}` });
       return success(`Rama ${branch} eliminada`);
     } catch (e) {
